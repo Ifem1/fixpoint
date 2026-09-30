@@ -80,7 +80,7 @@ def test_open_case_is_immutable_and_readable(direct_vm, direct_deploy, direct_al
     assert len(digest) == 64
     assert item["status"] == "OPEN"
     assert item["base_sha"] == BASE
-    assert item["creator"].lower() == direct_alice.as_hex.lower()
+    assert item["creator"].lower() == f"0x{direct_alice.hex()}"
 
 
 def test_duplicate_case_rejected(direct_vm, direct_deploy, direct_alice):
