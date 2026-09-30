@@ -8,12 +8,12 @@ export function resetSession() {
 
 export function connect(account: string) {
   currentAccount = account;
-  if (cachedSigner === null) cachedSigner = account;
+  cachedSigner = account;
 }
 
 export function disconnect() {
   currentAccount = null;
-  // Defect: the cached signer survives disconnect.
+  cachedSigner = null;
 }
 
 export function currentSigner() {
