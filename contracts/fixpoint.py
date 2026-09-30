@@ -629,8 +629,10 @@ class Fixpoint(gl.Contract):
             commits = compare_data.get("commits", [])
             files = compare_data.get("files", [])
             total_commits = compare_data.get("total_commits")
-            head_commit = compare_data.get("head_commit", {})
-            head_sha = str(head_commit.get("sha", "")).lower() if isinstance(head_commit, dict) else ""
+            # GitHub compare returns commits in chronological order; it does not
+            # expose a head_commit field. The final listed commit is the head.
+            head = commits[-1] if isinstance(commits, list) and commits else {}
+            head_sha = str(head.get("sha", "")).lower() if isinstance(head, dict) else ""
             if relation != "ahead" or head_sha != candidate_sha or not isinstance(commits, list) or not isinstance(files, list):
                 return {
                     "provenance": "INVALID",

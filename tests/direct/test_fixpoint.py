@@ -40,7 +40,7 @@ def submit(vm, contract, sender, candidate_id="fix-v1"):
     return contract.submit_candidate(candidate_id, "wallet-stale-signer", CANDIDATE, CANDIDATE_EVIDENCE, "[]")
 
 
-def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1):
+def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1, head_sha=CANDIDATE):
     vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 200, "body": "FAIL stale signer account=A after disconnect"})
     vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS signer account=B; old account absent"})
     vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*/witness\.md", {"status": 200, "body": "Run the same connect A / disconnect A / connect B witness and assert the active signer."})
@@ -51,8 +51,7 @@ def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1):
             "body": json.dumps({
                 "status": "ahead",
                 "total_commits": total_commits,
-                "head_commit": {"sha": CANDIDATE},
-                "commits": [{"sha": CANDIDATE}],
+                "commits": [{"sha": head_sha}],
                 "files": [{"filename": changed_file, "patch": "@@ -1 +1 @@\\n-stale=true\\n+stale=false"}],
             }),
         },
@@ -172,6 +171,14 @@ def test_incomplete_compare_commit_list_is_unproven(direct_vm, direct_deploy, di
     assert contract.assess_candidate("fix-v1") == "UNPROVEN"
 
 
+def test_compare_head_must_match_exact_candidate_sha(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm, head_sha="4" * 40)
+    assert contract.assess_candidate("fix-v1") == "INVALID_PROOF"
+
+
 def test_resolved_defect_with_failed_invariant_is_regression(direct_vm, direct_deploy, direct_alice, direct_bob):
     contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
@@ -206,7 +213,6 @@ def test_renamed_protected_path_is_still_detected(direct_vm, direct_deploy, dire
             "body": json.dumps({
                 "status": "ahead",
                 "total_commits": 1,
-                "head_commit": {"sha": CANDIDATE},
                 "commits": [{"sha": CANDIDATE}],
                 "files": [{
                     "filename": "tests/archive/wallet.md",
@@ -227,7 +233,7 @@ def test_unavailable_required_evidence_is_unproven_and_retriable(direct_vm, dire
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 503, "body": "unavailable"})
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS"})
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*", {"status": 200, "body": "witness"})
-    direct_vm.mock_web(r"api\.github\.com/repos/example/project/compare/.*", {"status": 200, "body": json.dumps({"status": "ahead", "total_commits": 1, "head_commit": {"sha": CANDIDATE}, "commits": [{}], "files": []})})
+    direct_vm.mock_web(r"api\.github\.com/repos/example/project/compare/.*", {"status": 200, "body": json.dumps({"status": "ahead", "total_commits": 1, "commits": [{}], "files": []})})
     assert contract.assess_candidate("fix-v1") == "UNPROVEN"
     assert contract.get_candidate("fix-v1")["assessment_count"] == 1
 
