@@ -1,0 +1,10 @@
+{
+  "network": "studionet",
+  "chainId": 61999,
+  "rpc": "https://studio.genlayer.com/api",
+  "contract": "Fixpoint",
+  "address": "",
+  "deploymentTransaction": "",
+  "sourceCommit": "",
+  "sourceSha256": ""
+}

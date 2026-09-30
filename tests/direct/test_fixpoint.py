@@ -1,0 +1,195 @@
+import json
+import pytest
+
+BASE = "1" * 40
+CANDIDATE = "2" * 40
+WITNESS = "3" * 40
+REPO = "https://github.com/example/project"
+WITNESS_REPO = "https://github.com/example/witness"
+BASE_EVIDENCE = f"https://raw.githubusercontent.com/example/project/{BASE}/evidence/base.txt"
+CANDIDATE_EVIDENCE = f"https://raw.githubusercontent.com/example/project/{CANDIDATE}/evidence/candidate.txt"
+WITNESS_URL = f"https://raw.githubusercontent.com/example/witness/{WITNESS}/witness.md"
+COMPARE_URL = f"https://api.github.com/repos/example/project/compare/{BASE}...{CANDIDATE}"
+
+
+def open_case(vm, contract, sender):
+    vm.sender = sender
+    return contract.open_case(
+        "wallet-stale-signer",
+        REPO,
+        BASE,
+        "Disconnecting wallet A leaves A available to the signer after wallet B connects.",
+        "Connect A; disconnect A; connect B; inspect signer state; attempt a write.",
+        "Signer state or write request still identifies wallet A.",
+        WITNESS_REPO,
+        WITNESS,
+        "witness.md",
+        BASE_EVIDENCE,
+        json.dumps(["tests/fixpoint", ".github/workflows/fixpoint.yml"]),
+        json.dumps([
+            {"id": "INV-1", "text": "Public reads work without a wallet."},
+            {"id": "INV-2", "text": "Wrong-network writes remain blocked."},
+        ]),
+    )
+
+
+def submit(vm, contract, sender, candidate_id="fix-v1"):
+    vm.sender = sender
+    return contract.submit_candidate(candidate_id, "wallet-stale-signer", CANDIDATE, CANDIDATE_EVIDENCE, "[]")
+
+
+def mock_evidence(vm, changed_file="src/wallet.ts"):
+    vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 200, "body": "FAIL stale signer account=A after disconnect"})
+    vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS signer account=B; old account absent"})
+    vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*/witness\.md", {"status": 200, "body": "Run the same connect A / disconnect A / connect B witness and assert the active signer."})
+    vm.mock_web(
+        r"api\.github\.com/repos/example/project/compare/.*",
+        {
+            "status": 200,
+            "body": json.dumps({
+                "status": "ahead",
+                "head_commit": {"sha": CANDIDATE},
+                "commits": [{"sha": CANDIDATE}],
+                "files": [{"filename": changed_file, "patch": "@@ -1 +1 @@\\n-stale=true\\n+stale=false"}],
+            }),
+        },
+    )
+
+
+def mock_assessment(vm, *, base="REPRODUCED", candidate="RESOLVED", witness="INTACT", fails=None, unknown=None):
+    vm.mock_llm(
+        r"independently assessing a software-fix claim",
+        json.dumps({
+            "base_defect": base,
+            "candidate_defect": candidate,
+            "witness_integrity": witness,
+            "invariant_fail_ids": fails or [],
+            "invariant_unproven_ids": unknown or [],
+            "reasoning": "The before evidence shows the frozen failure and the candidate evidence shows it absent under the same witness.",
+        }),
+    )
+
+
+def test_open_case_is_immutable_and_readable(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/fixpoint.py")
+    digest = open_case(direct_vm, contract, direct_alice)
+    item = contract.get_case("wallet-stale-signer")
+    assert len(digest) == 64
+    assert item["status"] == "OPEN"
+    assert item["base_sha"] == BASE
+    assert item["creator"].lower() == direct_alice.as_hex.lower()
+
+
+def test_duplicate_case_rejected(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    with direct_vm.expect_revert("case_id already exists"):
+        open_case(direct_vm, contract, direct_alice)
+
+
+def test_bad_sha_rejected(direct_vm, direct_deploy, direct_alice):
+    contract = direct_deploy("contracts/fixpoint.py")
+    direct_vm.sender = direct_alice
+    with direct_vm.expect_revert("full 40-character"):
+        contract.open_case(
+            "bad-case", REPO, "abc", "defect", "protocol", "failure", WITNESS_REPO, WITNESS,
+            "witness.md", BASE_EVIDENCE, "[]", json.dumps([{"id": "INV-1", "text": "Still works"}]),
+        )
+
+
+def test_only_creator_can_cancel_empty_case(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    direct_vm.sender = direct_bob
+    with direct_vm.expect_revert("only the case creator"):
+        contract.cancel_case("wallet-stale-signer")
+    direct_vm.sender = direct_alice
+    contract.cancel_case("wallet-stale-signer")
+    assert contract.get_case("wallet-stale-signer")["status"] == "CANCELLED"
+
+
+def test_duplicate_candidate_sha_rejected(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    with direct_vm.expect_revert("already submitted"):
+        submit(direct_vm, contract, direct_bob, "fix-v2")
+
+
+def test_fix_proven_creates_terminal_certificate(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm)
+    mock_assessment(direct_vm)
+    outcome = contract.assess_candidate("fix-v1")
+    assert outcome == "FIX_PROVEN"
+    case = contract.get_case("wallet-stale-signer")
+    assert case["status"] == "PROVEN"
+    cert = contract.get_certificate("wallet-stale-signer")
+    assert cert["candidate_sha"] == CANDIDATE
+    assert len(cert["certificate_digest"]) == 64
+    with direct_vm.expect_revert("not open for candidates"):
+        contract.submit_candidate("fix-v2", "wallet-stale-signer", "4" * 40, f"https://raw.githubusercontent.com/example/project/{'4' * 40}/evidence/new.txt", "[]")
+
+
+def test_same_defect_remaining_is_not_fixed(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm)
+    mock_assessment(direct_vm, candidate="PRESENT")
+    assert contract.assess_candidate("fix-v1") == "NOT_FIXED"
+    assert contract.get_case("wallet-stale-signer")["status"] == "OPEN"
+
+
+def test_resolved_defect_with_failed_invariant_is_regression(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm)
+    mock_assessment(direct_vm, fails=["INV-2"])
+    assert contract.assess_candidate("fix-v1") == "REGRESSION"
+
+
+def test_protected_verification_path_change_invalidates_proof(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm, changed_file="tests/fixpoint/wallet.md")
+    assert contract.assess_candidate("fix-v1") == "INVALID_PROOF"
+    candidate = contract.get_candidate("fix-v1")
+    assert candidate["witness_integrity"] == "ALTERED"
+
+
+def test_unavailable_required_evidence_is_unproven_and_retriable(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 503, "body": "unavailable"})
+    direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS"})
+    direct_vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*", {"status": 200, "body": "witness"})
+    direct_vm.mock_web(r"api\.github\.com/repos/example/project/compare/.*", {"status": 200, "body": json.dumps({"status": "ahead", "head_commit": {"sha": CANDIDATE}, "commits": [{}], "files": []})})
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+    assert contract.get_candidate("fix-v1")["assessment_count"] == 1
+
+    direct_vm.clear_mocks()
+    mock_evidence(direct_vm)
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "FIX_PROVEN"
+    assert contract.get_candidate("fix-v1")["assessment_count"] == 2
+
+
+def test_validator_must_reconstruct_material_fields(direct_vm, direct_deploy, direct_alice, direct_bob):
+    direct_vm.check_pickling = True
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm)
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "FIX_PROVEN"
+
+    direct_vm.clear_mocks()
+    mock_evidence(direct_vm)
+    mock_assessment(direct_vm, candidate="PRESENT")
+    assert direct_vm.run_validator() is False

@@ -1,0 +1,42 @@
+{
+  "name": "fixpoint",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:frontend": "vitest run tests/frontend",
+    "test:direct": "python -m pytest tests/direct -q",
+    "test:integration": "python -m pytest tests/integration -q",
+    "genlayer": "genlayer",
+    "gl:version": "genlayer --version",
+    "gl:network": "genlayer network info",
+    "gl:deploy": "genlayer deploy --contract contracts/fixpoint.py",
+    "verify:deployment": "node scripts/verify-deployment.mjs",
+    "check:repo": "node scripts/repo-audit.mjs",
+    "source:hash": "node scripts/source-hash.mjs"
+  },
+  "dependencies": {
+    "genlayer-js": "1.1.8",
+    "next": "16.3.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.3.7",
+    "genlayer": "0.39.1",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

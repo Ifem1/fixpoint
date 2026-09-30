@@ -1,0 +1,6 @@
+WITNESS RESULT: FAIL
+sequence: reset -> connect 0xaaaa -> disconnect -> connect 0xbbbb -> currentSigner
+expected signer: 0xbbbb
+observed signer: 0xaaaa
+failure signature: observed signer 0xaaaa after reconnecting 0xbbbb
+invariants: connect=PASS, disconnect=FAIL, reconnect=FAIL, public-read=PASS
