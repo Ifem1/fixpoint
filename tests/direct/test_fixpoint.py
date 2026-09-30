@@ -59,14 +59,22 @@ def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1, head_sha=CA
 
 
 def mock_assessment(vm, *, base="REPRODUCED", candidate="RESOLVED", witness="INTACT", fails=None, unknown=None):
+    fails = set(fails or [])
+    unknown = set(unknown or [])
     vm.mock_llm(
         r"independently assessing a software-fix claim",
         json.dumps({
             "base_defect": base,
             "candidate_defect": candidate,
             "witness_integrity": witness,
-            "invariant_fail_ids": fails or [],
-            "invariant_unproven_ids": unknown or [],
+            "invariant_findings": [
+                {
+                    "id": inv_id,
+                    "status": "VIOLATED" if inv_id in fails else "UNPROVEN" if inv_id in unknown else "PRESERVED",
+                    "basis": "Candidate source and witness evidence support this invariant classification.",
+                }
+                for inv_id in ("INV-1", "INV-2")
+            ],
             "reasoning": "The before evidence shows the frozen failure and the candidate evidence shows it absent under the same witness.",
         }),
     )
@@ -160,6 +168,24 @@ def test_missing_invariant_fields_cannot_prove_fix(direct_vm, direct_deploy, dir
         }),
     )
     with direct_vm.expect_revert("omitted material decision fields"):
+        contract.assess_candidate("fix-v1")
+
+
+def test_partial_invariant_findings_cannot_prove_fix(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm)
+    direct_vm.mock_llm(
+        r"independently assessing a software-fix claim",
+        json.dumps({
+            "base_defect": "REPRODUCED",
+            "candidate_defect": "RESOLVED",
+            "witness_integrity": "INTACT",
+            "invariant_findings": [{"id": "INV-1", "status": "PRESERVED", "basis": "The candidate preserves the public read path."}],
+        }),
+    )
+    with direct_vm.expect_revert("assess every frozen invariant once"):
         contract.assess_candidate("fix-v1")
 
 

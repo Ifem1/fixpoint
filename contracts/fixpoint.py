@@ -229,25 +229,11 @@ def _extract_json(raw: typing.Any) -> dict[str, typing.Any]:
     return parsed
 
 
-def _normalise_ids(value: typing.Any, allowed_ids: set[str]) -> str:
-    if not isinstance(value, list):
-        raise gl.vm.UserError("validator invariant ids must be arrays")
-    result: list[str] = []
-    for item in value:
-        item = str(item)
-        if item not in allowed_ids:
-            raise gl.vm.UserError("validator returned an unknown invariant id")
-        if item not in result:
-            result.append(item)
-    result.sort()
-    return ",".join(result)
-
-
 def _normalise_assessment(raw: typing.Any, invariant_ids: set[str]) -> dict[str, str]:
     data = _extract_json(raw)
     required = {
         "base_defect", "candidate_defect", "witness_integrity",
-        "invariant_fail_ids", "invariant_unproven_ids",
+        "invariant_findings",
     }
     if not required.issubset(data):
         raise gl.vm.UserError("validator omitted material decision fields")
@@ -260,10 +246,31 @@ def _normalise_assessment(raw: typing.Any, invariant_ids: set[str]) -> dict[str,
         raise gl.vm.UserError("validator returned invalid candidate_defect")
     if witness not in (WITNESS_INTACT, WITNESS_ALTERED, WITNESS_UNPROVEN):
         raise gl.vm.UserError("validator returned invalid witness_integrity")
-    fail_ids = _normalise_ids(data["invariant_fail_ids"], invariant_ids)
-    unproven_ids = _normalise_ids(data["invariant_unproven_ids"], invariant_ids)
-    if set(filter(None, fail_ids.split(","))) & set(filter(None, unproven_ids.split(","))):
-        raise gl.vm.UserError("an invariant cannot be both failed and unproven")
+    findings = data["invariant_findings"]
+    if not isinstance(findings, list) or len(findings) != len(invariant_ids):
+        raise gl.vm.UserError("validator must assess every frozen invariant once")
+    seen: set[str] = set()
+    fails: list[str] = []
+    unproven: list[str] = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            raise gl.vm.UserError("invariant finding must be an object")
+        inv_id = str(finding.get("id", ""))
+        status = str(finding.get("status", "")).upper()
+        basis = str(finding.get("basis", "")).strip()
+        if inv_id not in invariant_ids or inv_id in seen:
+            raise gl.vm.UserError("invariant finding id must be frozen and unique")
+        if status not in ("PRESERVED", "VIOLATED", "UNPROVEN"):
+            raise gl.vm.UserError("invariant finding status is invalid")
+        if len(basis) < 12 or len(basis) > 240:
+            raise gl.vm.UserError("invariant finding needs a concise evidence basis")
+        seen.add(inv_id)
+        if status == "VIOLATED":
+            fails.append(inv_id)
+        elif status == "UNPROVEN":
+            unproven.append(inv_id)
+    fail_ids = ",".join(sorted(fails))
+    unproven_ids = ",".join(sorted(unproven))
     reasoning = str(data.get("reasoning", "")).strip()
     if len(reasoning) > MAX_REASONING:
         reasoning = reasoning[:MAX_REASONING]
@@ -750,12 +757,11 @@ Return ONLY one JSON object with exactly these decision fields:
   "base_defect": "REPRODUCED" | "NOT_REPRODUCED" | "UNPROVEN",
   "candidate_defect": "RESOLVED" | "PRESENT" | "UNPROVEN",
   "witness_integrity": "INTACT" | "ALTERED" | "UNPROVEN",
-  "invariant_fail_ids": ["only ids from the frozen invariant set"],
-  "invariant_unproven_ids": ["only ids from the frozen invariant set"],
+  "invariant_findings": [{{"id": "one frozen id", "status": "PRESERVED" | "VIOLATED" | "UNPROVEN", "basis": "12-240 characters of specific evidence for this invariant"}}],
   "reasoning": "max 100 words, concrete and evidence-based"
 }}
 
-Classify the baseline independently, the candidate independently, and every invariant independently. The contract, not you, derives the final case outcome."""
+Classify the baseline independently, the candidate independently, and every frozen invariant exactly once. Mark an invariant VIOLATED only when the candidate code or evidence concretely shows a new violation; lack of proof is UNPROVEN. Do not infer a violation merely because the base had a defect. Match each basis and the summary reasoning to the status you return. The contract, not you, derives the final case outcome."""
             raw = gl.nondet.exec_prompt(prompt)
             assessed = _normalise_assessment(raw, invariant_ids)
             assessed["provenance"] = "BOUND"
