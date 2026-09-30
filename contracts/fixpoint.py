@@ -360,12 +360,6 @@ class Fixpoint(gl.Contract):
     proven_count: u32
 
     def __init__(self):
-        self.cases = TreeMap()
-        self.candidates = TreeMap()
-        self.case_ids = DynArray()
-        self.candidate_ids = DynArray()
-        self.candidate_sha_seen = TreeMap()
-        self.evidence_digest_seen = TreeMap()
         self.proven_count = u32(0)
 
     @gl.public.write
