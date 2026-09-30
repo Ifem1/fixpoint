@@ -8,7 +8,7 @@ Do not use working-tree files as evidence. Use the exact published commit SHAs r
 
 - Known-broken base commit: `bb6419d90392894e8c56d60cae855263233fc894`
 - Candidate fix commit: `38d7b8af2acb7d29b957c42d7d9b1ecc85359e1c`
-- Target repository: replace with the final public GitHub `owner/repo`
+- Target repository: `https://github.com/Ifem1/fixpoint`
 - Witness path: `examples/fixpoint-demo/witness.md`
 - Base evidence path: `examples/fixpoint-demo/evidence/result.txt`
 - Candidate evidence path: `examples/fixpoint-demo/evidence/result.txt`
