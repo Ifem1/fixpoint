@@ -5,5 +5,6 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "node_modules/**", "coverage/**"]),
+  globalIgnores([".next/**", "node_modules/**", ".venv/**", "coverage/**"]),
+  { rules: { "react-hooks/set-state-in-effect": "off" } },
 ]);

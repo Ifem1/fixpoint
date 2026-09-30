@@ -13,6 +13,12 @@ import type {
 } from "./types";
 
 const readClient = createClient({ chain: studionet });
+type SdkHash = Parameters<typeof readClient.getTransaction>[0]["hash"];
+
+function requireHash(hash: string): SdkHash {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Transaction hash must be 32 bytes.");
+  return hash as SdkHash;
+}
 
 function requireAddress() {
   if (!FIXPOINT_CONTRACT_ADDRESS) {
@@ -148,7 +154,7 @@ function txNames(transaction: unknown) {
 
 export async function waitForDecision(hash: string) {
   const transaction = await readClient.waitForTransactionReceipt({
-    hash: hash as `0x${string}`,
+    hash: requireHash(hash),
     status: TransactionStatus.ACCEPTED,
   });
   return { transaction, ...txNames(transaction) };
@@ -156,13 +162,13 @@ export async function waitForDecision(hash: string) {
 
 export async function waitForFinalization(hash: string) {
   const transaction = await readClient.waitForTransactionReceipt({
-    hash: hash as `0x${string}`,
+    hash: requireHash(hash),
     status: TransactionStatus.FINALIZED,
   });
   return { transaction, ...txNames(transaction) };
 }
 
 export async function getTransaction(hash: string) {
-  const transaction = await readClient.getTransaction({ hash: hash as `0x${string}` });
+  const transaction = await readClient.getTransaction({ hash: requireHash(hash) });
   return { transaction, ...txNames(transaction) };
 }

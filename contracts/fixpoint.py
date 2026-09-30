@@ -549,40 +549,41 @@ class Fixpoint(gl.Contract):
         invariant_data = json.loads(invariants_json)
         invariant_ids = set(item["id"] for item in invariant_data)
 
-        def fetch_text(url: str, maximum: int) -> dict[str, typing.Any]:
-            try:
-                if url.startswith("https://api.github.com/"):
-                    response = gl.nondet.web.get(url, headers=GITHUB_API_HEADERS)
-                else:
-                    response = gl.nondet.web.get(url)
-                status = int(getattr(response, "status", getattr(response, "status_code", 200)))
-                if status < 200 or status >= 300:
-                    return {"ok": False, "status": status, "text": ""}
-                body = (response.body or b"").decode("utf-8", errors="replace")
-                return {"ok": True, "status": status, "text": body[:maximum]}
-            except Exception as exc:
-                return {"ok": False, "status": 0, "text": str(exc)[:180]}
-
-        def fetch_bound(url: str, expected_sha: str, maximum: int, allow_run: bool) -> dict[str, typing.Any]:
-            try:
-                loc = _evidence_locator(url, owner, repo, expected_sha, allow_run)
-            except Exception as exc:
-                return {"state": "INVALID", "content": str(exc)[:180], "kind": ""}
-            fetched = fetch_text(loc["fetch_url"], maximum)
-            if not fetched["ok"]:
-                return {"state": "UNAVAILABLE", "content": "", "kind": loc["kind"]}
-            if loc["kind"] == "ACTION_RUN":
-                try:
-                    run = json.loads(fetched["text"])
-                except Exception:
-                    return {"state": "UNAVAILABLE", "content": "", "kind": loc["kind"]}
-                if str(run.get("head_sha", "")).lower() != expected_sha:
-                    return {"state": "INVALID", "content": "action run head_sha mismatch", "kind": loc["kind"]}
-                if str(run.get("status", "")) != "completed":
-                    return {"state": "UNAVAILABLE", "content": "action run is not completed", "kind": loc["kind"]}
-            return {"state": "BOUND", "content": fetched["text"], "kind": loc["kind"]}
-
         def leader_fn() -> dict[str, str]:
+            def fetch_text(url: str, maximum: int) -> dict[str, typing.Any]:
+                try:
+                    if url.startswith("https://api.github.com/"):
+                        response = gl.nondet.web.get(url, headers=GITHUB_API_HEADERS)
+                    else:
+                        response = gl.nondet.web.get(url)
+                    status = int(getattr(response, "status", getattr(response, "status_code", 200)))
+                    if status < 200 or status >= 300:
+                        return {"ok": False, "status": status, "text": ""}
+                    body = (response.body or b"").decode("utf-8", errors="replace")
+                    return {"ok": True, "status": status, "text": body[:maximum]}
+                except Exception as exc:
+                    return {"ok": False, "status": 0, "text": str(exc)[:180]}
+
+            def fetch_bound(url: str, expected_sha: str, maximum: int, allow_run: bool) -> dict[str, typing.Any]:
+                try:
+                    loc = _evidence_locator(url, owner, repo, expected_sha, allow_run)
+                except Exception as exc:
+                    return {"state": "INVALID", "content": str(exc)[:180], "kind": ""}
+                fetched = fetch_text(loc["fetch_url"], maximum)
+                if not fetched["ok"]:
+                    return {"state": "UNAVAILABLE", "content": "", "kind": loc["kind"]}
+                if loc["kind"] == "ACTION_RUN":
+                    try:
+                        run = json.loads(fetched["text"])
+                    except Exception:
+                        return {"state": "UNAVAILABLE", "content": "", "kind": loc["kind"]}
+                    if str(run.get("head_sha", "")).lower() != expected_sha:
+                        return {"state": "INVALID", "content": "action run head_sha mismatch", "kind": loc["kind"]}
+                    if str(run.get("status", "")) != "completed":
+                        return {"state": "UNAVAILABLE", "content": "action run is not completed", "kind": loc["kind"]}
+                return {"state": "BOUND", "content": fetched["text"], "kind": loc["kind"]}
+
+
             base = fetch_bound(base_evidence_url, base_sha, 6000, False)
             after = fetch_bound(candidate_evidence_url, candidate_sha, 6000, False)
             witness_url = f"https://raw.githubusercontent.com/{witness_owner}/{witness_name}/{witness_sha}/{witness_path}"
@@ -627,6 +628,7 @@ class Fixpoint(gl.Contract):
             relation = str(compare_data.get("status", ""))
             commits = compare_data.get("commits", [])
             files = compare_data.get("files", [])
+            total_commits = compare_data.get("total_commits")
             head_commit = compare_data.get("head_commit", {})
             head_sha = str(head_commit.get("sha", "")).lower() if isinstance(head_commit, dict) else ""
             if relation != "ahead" or head_sha != candidate_sha or not isinstance(commits, list) or not isinstance(files, list):
@@ -639,7 +641,9 @@ class Fixpoint(gl.Contract):
                     "invariant_unproven_ids": ",".join(sorted(invariant_ids)),
                     "reasoning": "Candidate is not a bounded descendant of the frozen base revision.",
                 }
-            if len(commits) > 30 or len(files) > 60:
+            if (not isinstance(total_commits, int) or total_commits < 1
+                    or total_commits != len(commits) or total_commits > 30
+                    or len(files) > 60):
                 return {
                     "provenance": "UNAVAILABLE",
                     "base_defect": BASE_UNPROVEN,

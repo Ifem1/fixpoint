@@ -70,11 +70,11 @@ export function PendingRecovery() {
       // A tracking timeout or temporary RPC error is not proof that the transaction failed.
       setTrackingError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [retry]);
+  }, []);
 
   useEffect(() => {
     void recover();
-  }, [recover]);
+  }, [recover, retry]);
 
   if (!tx) return null;
 

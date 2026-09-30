@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { waitForDecision, waitForFinalization } from "./genlayer";
-import { patchJournal, putJournal } from "./journal";
+import { patchJournal, pendingJournal, putJournal } from "./journal";
 import { phaseFromSnapshot } from "./lifecycle";
 import type { TxJournalEntry, TxPhase } from "./types";
 
@@ -18,9 +18,14 @@ export interface ActiveTransaction {
 
 export function useTransaction() {
   const [active, setActive] = useState<ActiveTransaction | null>(null);
+  const busy = useRef(false);
 
   const run = useCallback(
     async (action: string, subjectId: string, submit: () => Promise<string>, onFinalized?: () => Promise<void> | void) => {
+      if (busy.current || pendingJournal().some((entry) => entry.action === action && entry.subjectId === subjectId)) {
+        throw new Error("This transaction is already pending. Resume tracking before trying again.");
+      }
+      busy.current = true;
       let submittedHash: string | undefined;
       setActive({ phase: "preparing", action, subjectId });
       try {
@@ -80,15 +85,20 @@ export function useTransaction() {
         return hash;
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
-        setActive((previous) => ({
-          phase: "failed",
-          action,
-          subjectId,
-          hash: submittedHash ?? previous?.hash,
-          error: message,
-        }));
-        if (submittedHash) patchJournal(submittedHash, { phase: "failed", error: message });
+        if (submittedHash) {
+          setActive((previous) => ({
+            phase: previous?.phase === "finalized" ? "finalized" : previous?.phase === "accepted" ? "accepted" : "submitted",
+            action,
+            subjectId,
+            hash: submittedHash,
+            error: `Tracking paused: ${message}`,
+          }));
+        } else {
+          setActive({ phase: "failed", action, subjectId, error: message });
+        }
         throw cause;
+      } finally {
+        busy.current = false;
       }
     },
     [],

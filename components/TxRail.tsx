@@ -33,7 +33,8 @@ export function TxRail({ tx }: { tx: ActiveTransaction | null }) {
           );
         })}
       </div>
-      {tx.phase === "failed" && <p className="error-text">{tx.error ?? `${tx.statusName ?? "transaction"} failed`}</p>}
+      {tx.error && <p className={tx.phase === "failed" ? "error-text" : ""}>{tx.error}</p>}
+      {tx.phase === "failed" && !tx.error && <p className="error-text">{tx.statusName ?? "transaction"} failed</p>}
       {tx.hash && <code>{tx.hash}</code>}
     </section>
   );

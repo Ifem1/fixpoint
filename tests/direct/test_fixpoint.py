@@ -48,6 +48,7 @@ def mock_evidence(vm, changed_file="src/wallet.ts"):
             "status": 200,
             "body": json.dumps({
                 "status": "ahead",
+                "total_commits": 1,
                 "head_commit": {"sha": CANDIDATE},
                 "commits": [{"sha": CANDIDATE}],
                 "files": [{"filename": changed_file, "patch": "@@ -1 +1 @@\\n-stale=true\\n+stale=false"}],
@@ -176,6 +177,7 @@ def test_renamed_protected_path_is_still_detected(direct_vm, direct_deploy, dire
             "status": 200,
             "body": json.dumps({
                 "status": "ahead",
+                "total_commits": 1,
                 "head_commit": {"sha": CANDIDATE},
                 "commits": [{"sha": CANDIDATE}],
                 "files": [{
@@ -197,7 +199,7 @@ def test_unavailable_required_evidence_is_unproven_and_retriable(direct_vm, dire
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 503, "body": "unavailable"})
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS"})
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*", {"status": 200, "body": "witness"})
-    direct_vm.mock_web(r"api\.github\.com/repos/example/project/compare/.*", {"status": 200, "body": json.dumps({"status": "ahead", "head_commit": {"sha": CANDIDATE}, "commits": [{}], "files": []})})
+    direct_vm.mock_web(r"api\.github\.com/repos/example/project/compare/.*", {"status": 200, "body": json.dumps({"status": "ahead", "total_commits": 1, "head_commit": {"sha": CANDIDATE}, "commits": [{}], "files": []})})
     assert contract.assess_candidate("fix-v1") == "UNPROVEN"
     assert contract.get_candidate("fix-v1")["assessment_count"] == 1
 

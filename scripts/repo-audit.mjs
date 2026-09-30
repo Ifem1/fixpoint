@@ -1,8 +1,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = new URL("../", import.meta.url);
-const rootPath = root.pathname;
+const rootPath = fileURLToPath(root);
 const excluded = new Set([".git", ".next", "node_modules", "coverage", ".venv", "__pycache__", ".pytest_cache"]);
 const textExtensions = new Set([".ts", ".tsx", ".js", ".mjs", ".json", ".md", ".py", ".yaml", ".yml", ".toml", ".txt", ".example", ".gitignore"]);
 const files = [];
