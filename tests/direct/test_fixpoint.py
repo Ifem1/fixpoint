@@ -162,6 +162,34 @@ def test_protected_verification_path_change_invalidates_proof(direct_vm, direct_
     assert candidate["witness_integrity"] == "ALTERED"
 
 
+
+def test_renamed_protected_path_is_still_detected(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py")
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 200, "body": "FAIL stale signer account=A after disconnect"})
+    direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS signer account=B; old account absent"})
+    direct_vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*", {"status": 200, "body": "witness"})
+    direct_vm.mock_web(
+        r"api\.github\.com/repos/example/project/compare/.*",
+        {
+            "status": 200,
+            "body": json.dumps({
+                "status": "ahead",
+                "head_commit": {"sha": CANDIDATE},
+                "commits": [{"sha": CANDIDATE}],
+                "files": [{
+                    "filename": "tests/archive/wallet.md",
+                    "previous_filename": "tests/fixpoint/wallet.md",
+                    "status": "renamed",
+                    "patch": "@@ -1 +1 @@\n-old\n+new",
+                }],
+            }),
+        },
+    )
+    assert contract.assess_candidate("fix-v1") == "INVALID_PROOF"
+
+
 def test_unavailable_required_evidence_is_unproven_and_retriable(direct_vm, direct_deploy, direct_alice, direct_bob):
     contract = direct_deploy("contracts/fixpoint.py")
     open_case(direct_vm, contract, direct_alice)

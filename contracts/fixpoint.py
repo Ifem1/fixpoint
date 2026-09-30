@@ -658,7 +658,11 @@ class Fixpoint(gl.Contract):
                 if not isinstance(file, dict):
                     continue
                 filename = str(file.get("filename", ""))
-                changed_paths.append(filename)
+                previous_filename = str(file.get("previous_filename", ""))
+                if filename:
+                    changed_paths.append(filename)
+                if previous_filename and previous_filename not in changed_paths:
+                    changed_paths.append(previous_filename)
                 patch = str(file.get("patch", ""))[:1400]
                 if patch and patch_chars < 12000:
                     patches.append(f"FILE {filename}\n{patch}")

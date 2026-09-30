@@ -18,6 +18,7 @@ Coverage includes:
 - `NOT_FIXED`;
 - `REGRESSION`;
 - protected verification path modification -> `INVALID_PROOF`;
+- protected-path rename evasions are detected through GitHub `previous_filename`;
 - unavailable evidence -> `UNPROVEN`;
 - retry of an unproven candidate;
 - validator disagreement preventing improper consensus.

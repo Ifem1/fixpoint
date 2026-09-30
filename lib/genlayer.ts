@@ -36,7 +36,7 @@ export async function readStats(): Promise<StatsView> {
     address: requireAddress(),
     functionName: "get_stats",
     args: [],
-  })) as StatsView;
+  })) as unknown as StatsView;
 }
 
 export async function listCaseIds(offset = 0, limit = 50): Promise<string[]> {
@@ -44,7 +44,7 @@ export async function listCaseIds(offset = 0, limit = 50): Promise<string[]> {
     address: requireAddress(),
     functionName: "list_case_ids",
     args: [offset, limit],
-  })) as string[];
+  })) as unknown as string[];
 }
 
 export async function readCase(caseId: string): Promise<CaseView> {
@@ -52,7 +52,7 @@ export async function readCase(caseId: string): Promise<CaseView> {
     address: requireAddress(),
     functionName: "get_case",
     args: [caseId],
-  })) as CaseView;
+  })) as unknown as CaseView;
 }
 
 export async function listCandidateIds(caseId: string): Promise<string[]> {
@@ -60,7 +60,7 @@ export async function listCandidateIds(caseId: string): Promise<string[]> {
     address: requireAddress(),
     functionName: "list_candidate_ids",
     args: [caseId],
-  })) as string[];
+  })) as unknown as string[];
 }
 
 export async function readCandidate(candidateId: string): Promise<CandidateView> {
@@ -68,7 +68,7 @@ export async function readCandidate(candidateId: string): Promise<CandidateView>
     address: requireAddress(),
     functionName: "get_candidate",
     args: [candidateId],
-  })) as CandidateView;
+  })) as unknown as CandidateView;
 }
 
 export async function readCertificate(caseId: string): Promise<CertificateView> {
@@ -76,7 +76,7 @@ export async function readCertificate(caseId: string): Promise<CertificateView> 
     address: requireAddress(),
     functionName: "get_certificate",
     args: [caseId],
-  })) as CertificateView;
+  })) as unknown as CertificateView;
 }
 
 export async function openCaseTx(account: string, provider: Eip1193Provider, input: OpenCaseInput) {

@@ -6,8 +6,8 @@ Do not use working-tree files as evidence. Use the exact published commit SHAs r
 
 ## Revision pair
 
-- Known-broken base commit: `BASE_COMMIT_TO_BE_RECORDED`
-- Candidate fix commit: `CANDIDATE_COMMIT_TO_BE_RECORDED`
+- Known-broken base commit: `bb6419d90392894e8c56d60cae855263233fc894`
+- Candidate fix commit: `38d7b8af2acb7d29b957c42d7d9b1ecc85359e1c`
 - Target repository: replace with the final public GitHub `owner/repo`
 - Witness path: `examples/fixpoint-demo/witness.md`
 - Base evidence path: `examples/fixpoint-demo/evidence/result.txt`
