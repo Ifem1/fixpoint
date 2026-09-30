@@ -40,7 +40,7 @@ def submit(vm, contract, sender, candidate_id="fix-v1"):
     return contract.submit_candidate(candidate_id, "wallet-stale-signer", CANDIDATE, CANDIDATE_EVIDENCE, "[]")
 
 
-def mock_evidence(vm, changed_file="src/wallet.ts"):
+def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1):
     vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 200, "body": "FAIL stale signer account=A after disconnect"})
     vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS signer account=B; old account absent"})
     vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*/witness\.md", {"status": 200, "body": "Run the same connect A / disconnect A / connect B witness and assert the active signer."})
@@ -50,7 +50,7 @@ def mock_evidence(vm, changed_file="src/wallet.ts"):
             "status": 200,
             "body": json.dumps({
                 "status": "ahead",
-                "total_commits": 1,
+                "total_commits": total_commits,
                 "head_commit": {"sha": CANDIDATE},
                 "commits": [{"sha": CANDIDATE}],
                 "files": [{"filename": changed_file, "patch": "@@ -1 +1 @@\\n-stale=true\\n+stale=false"}],
@@ -144,6 +144,32 @@ def test_same_defect_remaining_is_not_fixed(direct_vm, direct_deploy, direct_ali
     mock_assessment(direct_vm, candidate="PRESENT")
     assert contract.assess_candidate("fix-v1") == "NOT_FIXED"
     assert contract.get_case("wallet-stale-signer")["status"] == "OPEN"
+
+
+def test_missing_invariant_fields_cannot_prove_fix(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm)
+    direct_vm.mock_llm(
+        r"independently assessing a software-fix claim",
+        json.dumps({
+            "base_defect": "REPRODUCED",
+            "candidate_defect": "RESOLVED",
+            "witness_integrity": "INTACT",
+            "reasoning": "The omitted invariant fields must not mean preserved.",
+        }),
+    )
+    with direct_vm.expect_revert("omitted material decision fields"):
+        contract.assess_candidate("fix-v1")
+
+
+def test_incomplete_compare_commit_list_is_unproven(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm, total_commits=31)
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
 
 
 def test_resolved_defect_with_failed_invariant_is_regression(direct_vm, direct_deploy, direct_alice, direct_bob):

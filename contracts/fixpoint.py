@@ -245,6 +245,12 @@ def _normalise_ids(value: typing.Any, allowed_ids: set[str]) -> str:
 
 def _normalise_assessment(raw: typing.Any, invariant_ids: set[str]) -> dict[str, str]:
     data = _extract_json(raw)
+    required = {
+        "base_defect", "candidate_defect", "witness_integrity",
+        "invariant_fail_ids", "invariant_unproven_ids",
+    }
+    if not required.issubset(data):
+        raise gl.vm.UserError("validator omitted material decision fields")
     base = str(data.get("base_defect", "")).upper()
     candidate = str(data.get("candidate_defect", "")).upper()
     witness = str(data.get("witness_integrity", "")).upper()
@@ -254,8 +260,8 @@ def _normalise_assessment(raw: typing.Any, invariant_ids: set[str]) -> dict[str,
         raise gl.vm.UserError("validator returned invalid candidate_defect")
     if witness not in (WITNESS_INTACT, WITNESS_ALTERED, WITNESS_UNPROVEN):
         raise gl.vm.UserError("validator returned invalid witness_integrity")
-    fail_ids = _normalise_ids(data.get("invariant_fail_ids", []), invariant_ids)
-    unproven_ids = _normalise_ids(data.get("invariant_unproven_ids", []), invariant_ids)
+    fail_ids = _normalise_ids(data["invariant_fail_ids"], invariant_ids)
+    unproven_ids = _normalise_ids(data["invariant_unproven_ids"], invariant_ids)
     if set(filter(None, fail_ids.split(","))) & set(filter(None, unproven_ids.split(","))):
         raise gl.vm.UserError("an invariant cannot be both failed and unproven")
     reasoning = str(data.get("reasoning", "")).strip()
