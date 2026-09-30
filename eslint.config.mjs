@@ -6,5 +6,4 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   globalIgnores([".next/**", "node_modules/**", ".venv/**", "coverage/**"]),
-  { rules: { "react-hooks/set-state-in-effect": "off" } },
 ]);

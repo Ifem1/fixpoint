@@ -10,29 +10,42 @@ import type { CaseView, StatsView } from "@/lib/types";
 export default function CasesPage() {
   const [cases, setCases] = useState<CaseView[]>([]);
   const [stats, setStats] = useState<StatsView | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(contractConfigured);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!contractConfigured) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const [ids, nextStats] = await Promise.all([listCaseIds(), readStats()]);
-      const records = await Promise.all(ids.map((id) => readCase(id)));
-      setCases(records.reverse());
-      setStats(nextStats);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setLoading(false);
-    }
+    const [ids, nextStats] = await Promise.all([listCaseIds(), readStats()]);
+    const records = await Promise.all(ids.map((id) => readCase(id)));
+    return { records: records.reverse(), nextStats };
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!contractConfigured) return;
+    let cancelled = false;
+    void load().then(
+      ({ records, nextStats }) => {
+        if (cancelled) return;
+        setCases(records);
+        setStats(nextStats);
+      },
+      (cause: unknown) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      },
+    ).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [load]);
+
+  const refresh = () => {
+    setLoading(true);
+    setError(null);
+    void load().then(
+      ({ records, nextStats }) => {
+        setCases(records);
+        setStats(nextStats);
+      },
+      (cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)),
+    ).finally(() => setLoading(false));
+  };
 
   return (
     <div className="content-page cases-page">
@@ -48,7 +61,7 @@ export default function CasesPage() {
         </div>
       )}
       {loading && <div className="empty-state">reading canonical contract state…</div>}
-      {error && <div className="empty-state error-text">{error}<button onClick={() => void load()}>retry</button></div>}
+      {error && <div className="empty-state error-text">{error}<button onClick={refresh}>retry</button></div>}
       {!loading && !error && !contractConfigured && <div className="empty-state">The contract address will be configured after Studionet deployment.</div>}
       {!loading && contractConfigured && !cases.length && (
         <div className="empty-state"><strong>No cases yet.</strong><span>Open the first known-broken revision and freeze its witness.</span></div>

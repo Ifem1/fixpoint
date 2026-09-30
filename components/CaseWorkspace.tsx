@@ -24,25 +24,41 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
   const [candidates, setCandidates] = useState<CandidateView[]>([]);
   const [certificate, setCertificate] = useState<CertificateView | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(contractConfigured && initialCaseId));
   const [error, setError] = useState<string | null>(null);
   const [candidateForm, setCandidateForm] = useState({ id: "", sha: "", evidence: "", support: "" });
   const wallet = useWallet();
   const tx = useTransaction();
 
   const load = useCallback(async () => {
-    if (!contractConfigured || !initialCaseId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    const nextCase = await readCase(initialCaseId);
+    const ids = await listCandidateIds(initialCaseId);
+    const nextCandidates = await Promise.all(ids.map((id) => readCandidate(id)));
+    let nextCertificate: CertificateView | null = null;
+    if (nextCase.status === "PROVEN") nextCertificate = await readCertificate(initialCaseId);
+    return { nextCase, nextCandidates, nextCertificate };
+  }, [initialCaseId]);
+
+  useEffect(() => {
+    if (!contractConfigured || !initialCaseId) return;
+    let cancelled = false;
+    void load().then(
+      ({ nextCase, nextCandidates, nextCertificate }) => {
+        if (cancelled) return;
+        setItem(nextCase);
+        setCandidates(nextCandidates);
+        setCertificate(nextCertificate);
+      },
+      (cause: unknown) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      },
+    ).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [initialCaseId, load]);
+
+  const reload = async () => {
     try {
-      const nextCase = await readCase(initialCaseId);
-      const ids = await listCandidateIds(initialCaseId);
-      const nextCandidates = await Promise.all(ids.map((id) => readCandidate(id)));
-      let nextCertificate: CertificateView | null = null;
-      if (nextCase.status === "PROVEN") nextCertificate = await readCertificate(initialCaseId);
+      const { nextCase, nextCandidates, nextCertificate } = await load();
       setItem(nextCase);
       setCandidates(nextCandidates);
       setCertificate(nextCertificate);
@@ -51,9 +67,13 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [initialCaseId]);
+  };
 
-  useEffect(() => { void load(); }, [load]);
+  const refresh = () => {
+    setLoading(true);
+    setError(null);
+    void reload();
+  };
 
   const invariants = useMemo<InvariantInput[]>(() => {
     try { return item ? JSON.parse(item.invariants_json) : []; } catch { return []; }
@@ -88,7 +108,7 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
         }),
         async () => {
           setCandidateForm({ id: "", sha: "", evidence: "", support: "" });
-          await load();
+          await reload();
         },
       );
     } catch (cause) {
@@ -104,7 +124,7 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
         "assess candidate",
         candidateId,
         () => assessCandidateTx(writer.account, writer.provider, candidateId),
-        load,
+        reload,
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -116,7 +136,7 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
     try {
       if (!item) return;
       const writer = await requireWriter();
-      await tx.run("cancel case", item.case_id, () => cancelCaseTx(writer.account, writer.provider, item.case_id), load);
+      await tx.run("cancel case", item.case_id, () => cancelCaseTx(writer.account, writer.provider, item.case_id), reload);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -124,7 +144,7 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
 
   if (!initialCaseId) return <div className="content-page"><div className="empty-state">Missing case id. Open a case from the public ledger.</div></div>;
   if (loading) return <div className="content-page"><div className="empty-state">reconstructing case from contract state…</div></div>;
-  if (error && !item) return <div className="content-page"><div className="empty-state error-text">{error}<button onClick={() => void load()}>retry</button></div></div>;
+  if (error && !item) return <div className="content-page"><div className="empty-state error-text">{error}<button onClick={refresh}>retry</button></div></div>;
   if (!item) return <div className="content-page"><div className="empty-state">Case unavailable.</div></div>;
 
   const isCreator = wallet.account?.toLowerCase() === item.creator.toLowerCase();
@@ -139,7 +159,7 @@ export function CaseWorkspace({ initialCaseId }: { initialCaseId: string }) {
         </div>
         <div className="case-title-actions">
           <StatusChip value={item.status} />
-          <button className="text-button" onClick={() => void load()}>refresh state</button>
+          <button className="text-button" onClick={refresh}>refresh state</button>
         </div>
       </section>
 

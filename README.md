@@ -142,14 +142,13 @@ Node dependencies are repository-local and pinned in `package.json`.
 
 The CLI must be invoked through `npm run` or `npx` from this repository, not a globally installed version.
 
-## Setup
+## Setup on Windows PowerShell
 
-```bash
+```powershell
 npm install
 python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-cp .env.example .env.local
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env.local
 ```
 
 After contract deployment, set:
@@ -176,20 +175,22 @@ The public pages are:
 
 ## Verification
 
-```bash
+```powershell
 npm run check:repo
 npm run typecheck
 npm run lint
 npm run test:frontend
 npm run build
-python -m pytest tests/direct -q
-genvm-lint check contracts/fixpoint.py
+.\.venv\Scripts\python.exe -m pytest tests/direct -q
+.\.venv\Scripts\genvm-lint.exe check contracts/fixpoint.py
 ```
 
 A live network smoke test is opt-in:
 
-```bash
-RUN_STUDIONET=1 python -m pytest tests/integration/test_studionet_smoke.py -q
+```powershell
+$env:RUN_STUDIONET = '1'
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_studionet_smoke.py -q
+Remove-Item Env:RUN_STUDIONET
 ```
 
 See `docs/TESTING.md` for behavioural coverage.

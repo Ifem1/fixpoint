@@ -7,6 +7,7 @@ import { getTransaction, readCandidate, waitForDecision, waitForFinalization } f
 import { patchJournal, pendingJournal } from "@/lib/journal";
 import { phaseFromSnapshot } from "@/lib/lifecycle";
 import type { ActiveTransaction } from "@/lib/useTransaction";
+import type { TxJournalEntry } from "@/lib/types";
 
 export function PendingRecovery() {
   const [tx, setTx] = useState<ActiveTransaction | null>(null);
@@ -14,14 +15,9 @@ export function PendingRecovery() {
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
 
-  const recover = useCallback(async () => {
-    const entry = pendingJournal()[0];
-    if (!entry) return;
-
-    setTx({ ...entry });
-    setTrackingError(null);
+  const recover = useCallback(async (entry: TxJournalEntry, current: Awaited<ReturnType<typeof getTransaction>>) => {
     try {
-      const current = await getTransaction(entry.hash);
+      setTrackingError(null);
       let phase = phaseFromSnapshot(current);
       patchJournal(entry.hash, {
         phase,
@@ -68,12 +64,21 @@ export function PendingRecovery() {
       }
     } catch (cause) {
       // A tracking timeout or temporary RPC error is not proof that the transaction failed.
+      setTx({ ...entry });
       setTrackingError(cause instanceof Error ? cause.message : String(cause));
     }
   }, []);
 
   useEffect(() => {
-    void recover();
+    const entry = pendingJournal()[0];
+    if (!entry) return;
+    void getTransaction(entry.hash).then(
+      (current) => recover(entry, current),
+      (cause: unknown) => {
+        setTx({ ...entry });
+        setTrackingError(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
   }, [recover, retry]);
 
   if (!tx) return null;

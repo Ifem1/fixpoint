@@ -1,6 +1,8 @@
 import json
 import pytest
 
+SDK_VERSION = "v0.2.16"  # Its official legacy bundle contains the exact runner hash pinned in the contract.
+
 BASE = "1" * 40
 CANDIDATE = "2" * 40
 WITNESS = "3" * 40
@@ -72,7 +74,7 @@ def mock_assessment(vm, *, base="REPRODUCED", candidate="RESOLVED", witness="INT
 
 
 def test_open_case_is_immutable_and_readable(direct_vm, direct_deploy, direct_alice):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     digest = open_case(direct_vm, contract, direct_alice)
     item = contract.get_case("wallet-stale-signer")
     assert len(digest) == 64
@@ -82,14 +84,14 @@ def test_open_case_is_immutable_and_readable(direct_vm, direct_deploy, direct_al
 
 
 def test_duplicate_case_rejected(direct_vm, direct_deploy, direct_alice):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     with direct_vm.expect_revert("case_id already exists"):
         open_case(direct_vm, contract, direct_alice)
 
 
 def test_bad_sha_rejected(direct_vm, direct_deploy, direct_alice):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     direct_vm.sender = direct_alice
     with direct_vm.expect_revert("full 40-character"):
         contract.open_case(
@@ -99,7 +101,7 @@ def test_bad_sha_rejected(direct_vm, direct_deploy, direct_alice):
 
 
 def test_only_creator_can_cancel_empty_case(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     direct_vm.sender = direct_bob
     with direct_vm.expect_revert("only the case creator"):
@@ -110,7 +112,7 @@ def test_only_creator_can_cancel_empty_case(direct_vm, direct_deploy, direct_ali
 
 
 def test_duplicate_candidate_sha_rejected(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     with direct_vm.expect_revert("already submitted"):
@@ -118,7 +120,7 @@ def test_duplicate_candidate_sha_rejected(direct_vm, direct_deploy, direct_alice
 
 
 def test_fix_proven_creates_terminal_certificate(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     mock_evidence(direct_vm)
@@ -135,7 +137,7 @@ def test_fix_proven_creates_terminal_certificate(direct_vm, direct_deploy, direc
 
 
 def test_same_defect_remaining_is_not_fixed(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     mock_evidence(direct_vm)
@@ -145,7 +147,7 @@ def test_same_defect_remaining_is_not_fixed(direct_vm, direct_deploy, direct_ali
 
 
 def test_resolved_defect_with_failed_invariant_is_regression(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     mock_evidence(direct_vm)
@@ -154,7 +156,7 @@ def test_resolved_defect_with_failed_invariant_is_regression(direct_vm, direct_d
 
 
 def test_protected_verification_path_change_invalidates_proof(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     mock_evidence(direct_vm, changed_file="tests/fixpoint/wallet.md")
@@ -165,7 +167,7 @@ def test_protected_verification_path_change_invalidates_proof(direct_vm, direct_
 
 
 def test_renamed_protected_path_is_still_detected(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 200, "body": "FAIL stale signer account=A after disconnect"})
@@ -193,7 +195,7 @@ def test_renamed_protected_path_is_still_detected(direct_vm, direct_deploy, dire
 
 
 def test_unavailable_required_evidence_is_unproven_and_retriable(direct_vm, direct_deploy, direct_alice, direct_bob):
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     direct_vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 503, "body": "unavailable"})
@@ -212,7 +214,7 @@ def test_unavailable_required_evidence_is_unproven_and_retriable(direct_vm, dire
 
 def test_validator_must_reconstruct_material_fields(direct_vm, direct_deploy, direct_alice, direct_bob):
     direct_vm.check_pickling = True
-    contract = direct_deploy("contracts/fixpoint.py")
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
     open_case(direct_vm, contract, direct_alice)
     submit(direct_vm, contract, direct_bob)
     mock_evidence(direct_vm)

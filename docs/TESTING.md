@@ -6,6 +6,8 @@ The test strategy is behaviour-led rather than count-led.
 
 `tests/direct/test_fixpoint.py` exercises the contract with controlled nondeterministic web and LLM results.
 
+The Direct Mode fixture pins the official GenVM `v0.2.16` legacy bundle because `genlayer-test` `0.29.2` otherwise resolves a release whose expected archive URL is missing. The loader still selects the exact `py-genlayer` hash in `contracts/fixpoint.py`; it rejects the bundle if that runner is absent. This is test infrastructure only and does not change production contract source or dependencies.
+
 Coverage includes:
 
 - valid case creation and read-back;
@@ -45,19 +47,20 @@ This smoke test is not a substitute for the full manual/browser lifecycle. The f
 
 ## Required pre-deployment gate
 
-Run all of these from a clean checkout:
+Run these commands from a clean checkout in Windows PowerShell. Ubuntu GitHub Actions runs the same gates with its own Python executable.
 
-```bash
+```powershell
 npm ci
+python -m venv .venv
 npm run gl:version
 npm run check:repo
 npm run typecheck
 npm run lint
 npm run test:frontend
 npm run build
-python -m pip install -r requirements-dev.txt
-genvm-lint check contracts/fixpoint.py
-python -m pytest tests/direct -q
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\genvm-lint.exe check contracts/fixpoint.py
+.\.venv\Scripts\python.exe -m pytest tests/direct -q
 ```
 
 Do not convert a failed contract/linter/build result into documentation claiming success. Fix the defect or preserve the failure in the handoff report.

@@ -4,19 +4,20 @@ The deployment sequence is designed to keep the deployed contract source auditab
 
 ## 1. Verify the checkout
 
-Start from a clean tree and install dependencies.
+Start from a clean tree and install dependencies in Windows PowerShell. The same gates run separately on Ubuntu in GitHub Actions.
 
-```bash
+```powershell
 npm ci
-python -m pip install -r requirements-dev.txt
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 npm run gl:version
 npm run check:repo
 npm run typecheck
 npm run lint
 npm run test:frontend
 npm run build
-genvm-lint check contracts/fixpoint.py
-python -m pytest tests/direct -q
+.\.venv\Scripts\genvm-lint.exe check contracts/fixpoint.py
+.\.venv\Scripts\python.exe -m pytest tests/direct -q
 ```
 
 The local CLI must report `0.39.1`.
