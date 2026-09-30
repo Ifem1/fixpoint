@@ -3,8 +3,8 @@
   "chainId": 61999,
   "rpc": "https://studio.genlayer.com/api",
   "contract": "Fixpoint",
-  "address": "",
-  "deploymentTransaction": "",
-  "sourceCommit": "",
-  "sourceSha256": ""
+  "address": "0x788Cdeec22C1134F2Bb8Fd14f70156981A1748ad",
+  "deploymentTransaction": "0xedbba3bf8d86a7855449dc8e3e6db2805400f8528378359df0f909279a9106c4",
+  "sourceCommit": "6b1c1e2d554222ff5a59df40742a526cbf6e8fb6",
+  "sourceSha256": "986bac8e172fdf5d24e1ea6e4ed1b73b50dc02aab407b35230b768b6f32f87d8"
 }

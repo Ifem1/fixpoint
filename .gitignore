@@ -13,3 +13,5 @@ __pycache__/
 artifacts/
 *.log
 *.tsbuildinfo
+
+.vercel

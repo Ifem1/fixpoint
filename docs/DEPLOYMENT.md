@@ -24,7 +24,7 @@ The local CLI must report `0.39.1`.
 
 ## 2. Select Studionet
 
-```bash
+```powershell
 npm run genlayer -- network set studionet
 npm run gl:network
 ```
@@ -35,7 +35,7 @@ Confirm chain ID `61999` and RPC `https://studio.genlayer.com/api` before signin
 
 Commit every contract change before deployment. Record:
 
-```bash
+```powershell
 git rev-parse HEAD
 npm run source:hash
 ```
@@ -46,7 +46,7 @@ If the contract source changes after this point, repeat tests, commit again and 
 
 Use the repository-local CLI:
 
-```bash
+```powershell
 npm run gl:deploy
 ```
 
@@ -61,7 +61,7 @@ Update `deployments/studionet.json` with:
 
 Then run:
 
-```bash
+```powershell
 npm run verify:deployment
 ```
 
@@ -77,7 +77,7 @@ No deployer key belongs in the Next.js environment.
 
 Rebuild after setting the address:
 
-```bash
+```powershell
 npm run build
 ```
 
