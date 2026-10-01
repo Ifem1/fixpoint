@@ -1,25 +1,47 @@
 # Final controlled Studionet lifecycle
 
-Verified on 2026-09-30 against the production frontend at https://fixpoint-psi.vercel.app/case?id=stale-signer-control and Studionet chain 61999.
+Verified on 2026-10-01 through the production frontend at https://fixpoint-psi.vercel.app/case?id=stale-signer-final-control and independent reads from the new contract on Studionet chain 61999.
 
 ## Deployed source
 
-- Contract: `0xb196e8d498a9E95c129a48b302BC2585B7053346`
-- Source commit: `2245652c04b6e53ca8b127e272273f7180689f35`
-- `contracts/fixpoint.py` SHA-256: `49e91303cce66aef440fb00a0b832e28f04b0347814e3b1f6d490dc4b3b514a7`
-- Finalized deployment: https://explorer-studio.genlayer.com/tx/0xbe701f148d63ac16dba687b916ae2529fca05072b6f8e4f541f743d9d83ec90d
+- Contract: `0x1eAa37F79a3402596dE72062E20EcF1Fb2D62b77`
+- Source commit: `c73c231386b982c9bd707d34fded5594e3ded436`
+- `contracts/fixpoint.py` SHA-256: `6ce610441dff41904ff58b6382358e3c1e420f482dd463514589cf4d67fd3c67`
+- Finalized deployment: https://explorer-studio.genlayer.com/tx/0xbc7832911600445e50ffd0da96d047e0b126de408f767f519e44995e3ed9f6a8
 
-## Exact fixture and transactions
+## Controlled fixture and finalized transactions
 
 - Repository: https://github.com/Ifem1/fixpoint
 - Base: `bb6419d90392894e8c56d60cae855263233fc894`
 - Candidate: `38d7b8af2acb7d29b957c42d7d9b1ecc85359e1c`
-- Case: `stale-signer-control`
-- Candidate ID: `stale-signer-fix-1`
-- Finalized open case: https://explorer-studio.genlayer.com/tx/0xec06a975973d3f0881cd54bee8a81ed5fbba9bf29aad34c080367a19c50d7443
-- Finalized submit candidate: https://explorer-studio.genlayer.com/tx/0x4d748f03ff73b51d6048f58d6eb73828502e4eb33879c04c93a1e6272cd10e14
-- Finalized assess candidate: https://explorer-studio.genlayer.com/tx/0x14d6d089122b503904ed63a7dcaaac54db451621ff93cb02e9d27f4d984f11d7
+- Frozen witness: `examples/fixpoint-demo/witness.md` at the base SHA; the same path is protected.
+- Case: `stale-signer-final-control`
+- Candidate ID: `stale-signer-final-fix`
+- Open case, `FINALIZED`: https://explorer-studio.genlayer.com/tx/0x2592a9efcb2f310e7ebcbaa1df0dbc8341dd6e4dc1dd2f2f5c46ec6a925f346e
+- Submit candidate, `FINALIZED`: https://explorer-studio.genlayer.com/tx/0xd00392bcbe1f5f7a8b02b53afa61dc2d438415f65e317b27d224ac4a5686a14e
+- Assess candidate, `FINALIZED`, `MAJORITY_AGREE`: https://explorer-studio.genlayer.com/tx/0x247ca2121947a4872d77bade69a710708f83d2cde9982bf5cb9ea506d47cefa2
 
-The assessment receipt reached `MAJORITY_AGREE` and `FINALIZED`. Independent contract reads after refreshing the production page returned case status `PROVEN`, candidate outcome `FIX_PROVEN`, baseline `REPRODUCED`, candidate `RESOLVED`, witness `INTACT`, and no failed or unproven invariant IDs. The certificate digest is `c50910768fb1ae1ae795cce7d687ddcbd343455268fab412a94468b31fba7cab`; the evidence digest is `65779294f2071142f1c3ba23d437b898766a79ebd99a0619255fb57662a9d7a7`.
+The explorer showed each transaction's `To` address as the new contract and decoded the operations as `open_case`, `submit_candidate`, and `assess_candidate`. The CLI receipts also reported `FINALIZED`; `ACCEPTED` remained provisional in the frontend transaction tracker.
 
-Earlier superseded contract deployments produced `INVALID_PROOF` at `0x788Cdeec22C1134F2Bb8Fd14f70156981A1748ad` and `REGRESSION` at `0x9e9aD5FaF7796bD7BC2AE014A58F2C19f3C57826`. These immutable outcomes prompted narrow source corrections, full CI reruns, and redeployment. The final production frontend and deployment manifest point to `0xb196e8d498a9E95c129a48b302BC2585B7053346` only.
+## Final canonical state
+
+After a hard refresh, the production case page reconstructed status `PROVEN`, candidate outcome `FIX_PROVEN`, baseline `REPRODUCED`, candidate `RESOLVED`, and witness `INTACT`. `INV-CONNECT`, `INV-DISCONNECT`, `INV-RECONNECT`, and `INV-PUBLIC-READ` were each displayed as `PRESERVED`. Direct `get_case`, `get_candidate`, and `get_certificate` reads from the new contract agreed with the browser. The candidate record had empty failed and unproven invariant ID fields.
+
+- Case digest: `0ec4922f0c68be422a18615b98f54f9a4884c108e584c1f020ce842add5f16ad`
+- Certificate digest: `c50910768fb1ae1ae795cce7d687ddcbd343455268fab412a94468b31fba7cab`
+- Evidence digest: `65779294f2071142f1c3ba23d437b898766a79ebd99a0619255fb57662a9d7a7`
+
+The certificate digest is deterministic for this same frozen case/evidence tuple and therefore equals the earlier lifecycle's digest. This record was read directly from the **new** contract and is bound to the new case ID and candidate ID.
+
+## Production browser verification
+
+- The public `/cases` page loaded without a wallet, displayed Studionet 61999 and the new contract address, and initially read an empty ledger from the new contract.
+- The agent connected Rabby through the frontend. The wallet chip displayed `0x7d1170bc98624f98183972fabd69418bb7d5d541`.
+- The agent filled and submitted the open-case and candidate forms, triggered intelligent assessment, and followed the transaction tracker through finalized state. The user approved each wallet signature in Rabby.
+- Refreshing the open-case form while its transaction was pending recovered the transaction hash from the browser journal. Once final, the frontend offered a link to the finalized case. A later hard refresh reconstructed the full proof and certificate from contract state.
+- The production frontend's explorer links opened Studionet explorer pages. The explorer pages, refreshed after finality, showed the correct contract target, operation, and `FINALIZED` status.
+- At desktop width, the case header, evidence, status, and certificate displayed normally. At 390 px mobile emulation, a fresh capture and DOM layout check found no horizontal overflow; all measured elements stayed within the page width.
+- Explicit disconnect cleared the account chip, retained public reads, and changed the open-case action to `CONNECT WALLET`. Reconnection restored the same Rabby address.
+- With Rabby temporarily on another network, the open-case action became `SWITCH TO 61999`, blocking the write. Clicking it switched Rabby to GenLayer Studionet; the frontend displayed a network-switch success message and restored `OPEN CASE`.
+- Browser console errors came from multiple wallet extensions competing to inject `window.ethereum` (MetaMask and another extension). No FIXPOINT application error was observed; Rabby connection and all three writes succeeded.
+- Account-change event: **NOT EXERCISED — single account available**.

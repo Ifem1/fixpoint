@@ -247,4 +247,4 @@ Set the deployed address in the frontend environment and deploy the Next.js appl
 
 ## Deployment state
 
-The source package intentionally ships without a fabricated live address. `deployments/studionet.json` remains incomplete until the exact packaged source is deployed. Deployment evidence must be written only from a real Studionet transaction.
+FIXPOINT is live on Studionet 61999 at `0x1eAa37F79a3402596dE72062E20EcF1Fb2D62b77`. The production frontend is https://fixpoint-psi.vercel.app/. `deployments/studionet.json` records the finalized deployment transaction, exact source commit and source SHA-256. The prior contract is historical; it is not the current frontend target. See `docs/LIVE_RESULT.md` for the controlled lifecycle evidence.
