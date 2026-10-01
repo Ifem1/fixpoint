@@ -39,7 +39,6 @@ code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
 .wallet-popover { position: absolute; right: 0; top: 46px; width: 300px; padding: 14px; background: var(--ink); color: var(--paper); box-shadow: var(--shadow); z-index: 50; display: grid; gap: 10px; font-size: 12px; }
 .wallet-popover span { overflow-wrap: anywhere; color: #c7c7bd; }
 .wallet-popover button { background: transparent; color: var(--paper); border: 1px solid #666; padding: 9px; cursor: pointer; text-align: left; }
-.wallet-list button:hover { background: #25261f; }
 .network-line { height: 31px; padding: 0 4vw; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--ink); color: var(--paper); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .network-line b { color: var(--signal); }
 .configuration-banner { padding: 10px 4vw; font-size: 12px; border-bottom: 1px solid var(--ink); background: var(--amber); font-weight: 700; }

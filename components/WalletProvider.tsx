@@ -1,27 +1,26 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { NETWORK } from "@/lib/network";
 import {
   describeWalletError,
-  discoverInjectedWallets,
+  getAuthorizedAccounts,
   getChainId,
+  getInjectedProvider,
+  listenToWallet,
   requestAccounts,
   switchToStudionet,
   type Eip1193Provider,
-  type InjectedWalletInfo,
 } from "@/lib/wallet";
 
 interface WalletState {
-  wallets: InjectedWalletInfo[];
   account: string | null;
   chainId: number | null;
   provider: Eip1193Provider | null;
-  walletName: string | null;
   connected: boolean;
   correctNetwork: boolean;
   error: string | null;
-  connect: (uuid?: string) => Promise<void>;
+  connect: () => Promise<void>;
   disconnect: () => void;
   switchNetwork: () => Promise<void>;
 }
@@ -29,101 +28,123 @@ interface WalletState {
 const WalletContext = createContext<WalletState | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [wallets, setWallets] = useState<InjectedWalletInfo[]>([]);
   const [account, setAccount] = useState<string | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [provider, setProvider] = useState<Eip1193Provider | null>(null);
-  const [walletName, setWalletName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => discoverInjectedWallets(setWallets), []);
+  const generation = useRef(0);
 
   useEffect(() => {
-    if (!provider?.on) return;
-    const accountsChanged = (...args: unknown[]) => {
-      const values = Array.isArray(args[0]) ? args[0].map(String) : [];
-      setAccount(values[0] ?? null);
-      if (!values.length) {
-        setProvider(null);
-        setWalletName(null);
-        setError(null);
-      }
-    };
-    const chainChanged = (...args: unknown[]) => {
-      const value = String(args[0] ?? "");
-      const parsed = Number.parseInt(value, 16);
-      setChainId(Number.isFinite(parsed) ? parsed : null);
-      if (parsed === NETWORK.chainId) setError(null);
-    };
-    provider.on("accountsChanged", accountsChanged);
-    provider.on("chainChanged", chainChanged);
-    return () => {
-      provider.removeListener?.("accountsChanged", accountsChanged);
-      provider.removeListener?.("chainChanged", chainChanged);
-    };
-  }, [provider]);
+    const injected = getInjectedProvider();
+    if (!injected) return;
+    let active = true;
+    const restoreGeneration = generation.current;
 
-  const connect = useCallback(
-    async (uuid?: string) => {
+    const accountsChanged = (accounts: string[]) => {
+      generation.current += 1;
+      const currentGeneration = generation.current;
+      setAccount(accounts[0] ?? null);
+      setProvider(accounts[0] ? injected : null);
+      if (!accounts[0]) setChainId(null);
       setError(null);
-      try {
-        const chosen = wallets.find((item) => item.uuid === uuid) ?? wallets[0];
-        if (!chosen) throw new Error("No injected EVM wallet was detected.");
-        const accounts = await requestAccounts(chosen.provider);
-        if (!accounts[0]) throw new Error("The wallet returned no account.");
-        setProvider(chosen.provider);
-        setWalletName(chosen.name);
-        setAccount(accounts[0]);
-        setChainId(await getChainId(chosen.provider));
-      } catch (cause) {
-        const message = describeWalletError(cause);
-        setError(message);
-        throw new Error(message);
+      if (accounts[0]) {
+        void getChainId(injected).then((id) => {
+          if (active && generation.current === currentGeneration) setChainId(id);
+        }).catch(() => { if (active && generation.current === currentGeneration) setChainId(null); });
       }
-    },
-    [wallets],
-  );
+    };
+    const chainChanged = (id: number | null) => {
+      setChainId(id);
+      if (id === NETWORK.chainId) setError(null);
+    };
+    const stopListening = listenToWallet(injected, accountsChanged, chainChanged);
+
+    void getAuthorizedAccounts(injected).then(async (accounts) => {
+      if (!active || generation.current !== restoreGeneration || !accounts[0]) return;
+      setAccount(accounts[0]);
+      setProvider(injected);
+      try {
+        const id = await getChainId(injected);
+        if (active && generation.current === restoreGeneration) setChainId(id);
+      } catch {
+        if (active && generation.current === restoreGeneration) setChainId(null);
+      }
+    }).catch(() => {
+      // An unavailable wallet leaves the frontend disconnected.
+    });
+
+    return () => {
+      active = false;
+      stopListening();
+    };
+  }, []);
+
+  const connect = useCallback(async () => {
+    generation.current += 1;
+    const connectGeneration = generation.current;
+    setError(null);
+    try {
+      const injected = getInjectedProvider();
+      if (!injected) throw new Error("No injected EVM wallet was detected.");
+      const accounts = await requestAccounts(injected);
+      if (!accounts[0]) throw new Error("The wallet returned no account.");
+      if (generation.current !== connectGeneration) return;
+      setProvider(injected);
+      setAccount(accounts[0]);
+      try {
+        const id = await getChainId(injected);
+        if (generation.current === connectGeneration) setChainId(id);
+      } catch {
+        if (generation.current === connectGeneration) setChainId(null);
+      }
+    } catch (cause) {
+      if (generation.current === connectGeneration) setError(describeWalletError(cause));
+    }
+  }, []);
 
   const disconnect = useCallback(() => {
+    generation.current += 1;
     setAccount(null);
     setProvider(null);
-    setWalletName(null);
     setChainId(null);
     setError(null);
   }, []);
 
   const switchNetwork = useCallback(async () => {
-    if (!provider) throw new Error("Connect an injected wallet first.");
+    if (!provider) {
+      setError("Connect an injected wallet first.");
+      return;
+    }
+    const switchGeneration = generation.current;
     setError(null);
     try {
       const verifiedChainId = await switchToStudionet(provider);
-      setChainId(verifiedChainId);
+      if (generation.current === switchGeneration) setChainId(verifiedChainId);
     } catch (cause) {
-      const message = describeWalletError(cause);
-      setError(message);
+      if (generation.current !== switchGeneration) return;
+      setError(describeWalletError(cause));
       try {
-        setChainId(await getChainId(provider));
+        const id = await getChainId(provider);
+        if (generation.current === switchGeneration) setChainId(id);
       } catch {
-        setChainId(null);
+        if (generation.current === switchGeneration) setChainId(null);
       }
     }
   }, [provider]);
 
   const value = useMemo<WalletState>(
     () => ({
-      wallets,
       account,
       chainId,
       provider,
-      walletName,
       connected: Boolean(account && provider),
-      correctNetwork: chainId === NETWORK.chainId,
+      correctNetwork: Boolean(account && provider && chainId === NETWORK.chainId),
       error,
       connect,
       disconnect,
       switchNetwork,
     }),
-    [wallets, account, chainId, provider, walletName, error, connect, disconnect, switchNetwork],
+    [account, chainId, provider, error, connect, disconnect, switchNetwork],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

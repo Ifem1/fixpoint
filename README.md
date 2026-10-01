@@ -50,7 +50,7 @@ There is no application backend, server database, centralized evaluator, cron jo
 The frontend is Next.js App Router + TypeScript. It provides:
 
 - public read access without a wallet;
-- EIP-6963 discovery with an EIP-1193 fallback;
+- direct injected EIP-1193 wallet connection with silent approved-account restoration;
 - explicit local disconnect;
 - account and chain-change handling;
 - Studionet network switching;

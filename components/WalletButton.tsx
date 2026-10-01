@@ -35,7 +35,6 @@ export function WalletButton() {
         </button>
         {open && (
           <div className="wallet-popover">
-            <strong>{wallet.walletName ?? "Injected wallet"}</strong>
             <span>{wallet.account}</span>
             <button onClick={wallet.disconnect}>disconnect</button>
           </div>
@@ -49,28 +48,12 @@ export function WalletButton() {
     );
   }
 
-  if (wallet.wallets.length <= 1) {
-    return (
+  return (
+    <div className="wallet-cluster">
       <button className="wallet-button" onClick={() => void wallet.connect()}>
         connect wallet
       </button>
-    );
-  }
-
-  return (
-    <div className="wallet-cluster">
-      <button className="wallet-button" onClick={() => setOpen((value) => !value)}>
-        connect wallet
-      </button>
-      {open && (
-        <div className="wallet-popover wallet-list">
-          {wallet.wallets.map((item) => (
-            <button key={item.uuid} onClick={() => void wallet.connect(item.uuid)}>
-              {item.name}
-            </button>
-          ))}
-        </div>
-      )}
+      {wallet.error && <p className="wallet-switch-feedback error-text" role="alert">{wallet.error}</p>}
     </div>
   );
 }
