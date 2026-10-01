@@ -32,6 +32,8 @@ export function discoverInjectedWallets(onUpdate: (wallets: InjectedWalletInfo[]
     const announced = event as Eip6963AnnounceEvent;
     const { info, provider } = announced.detail ?? {};
     if (!info?.uuid || !provider) return;
+    // Prefer named EIP-6963 providers over a generic window.ethereum alias.
+    found.delete("legacy-window-ethereum");
     found.set(info.uuid, { ...info, provider });
     emit();
   };
@@ -40,7 +42,7 @@ export function discoverInjectedWallets(onUpdate: (wallets: InjectedWalletInfo[]
   window.dispatchEvent(new Event("eip6963:requestProvider"));
 
   const legacy = (window as typeof window & { ethereum?: Eip1193Provider }).ethereum;
-  if (legacy) {
+  if (legacy && !Array.from(found.keys()).some((uuid) => uuid !== "legacy-window-ethereum")) {
     found.set("legacy-window-ethereum", {
       uuid: "legacy-window-ethereum",
       name: "Injected wallet",
@@ -73,30 +75,41 @@ export async function switchToStudionet(provider: Eip1193Provider) {
   } catch (error) {
     const maybe = error as { code?: number };
     if (maybe.code !== 4902) throw error;
-    await provider.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: NETWORK.chainIdHex,
-          chainName: NETWORK.name,
-          nativeCurrency: NETWORK.currency,
-          rpcUrls: [NETWORK.rpcUrl],
-          blockExplorerUrls: [NETWORK.explorerUrl],
-        },
-      ],
-    });
+    try {
+      await provider.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: NETWORK.chainIdHex,
+            chainName: NETWORK.name,
+            nativeCurrency: NETWORK.currency,
+            rpcUrls: [NETWORK.rpcUrl],
+            blockExplorerUrls: [NETWORK.explorerUrl],
+          },
+        ],
+      });
+    } catch (addError) {
+      const addCode = (addError as { code?: number })?.code;
+      if (addCode === 4001 || addCode === -32002) throw addError;
+      throw new Error("Studionet could not be configured in this wallet.");
+    }
     await provider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: NETWORK.chainIdHex }],
     });
   }
+  const chainId = await getChainId(provider);
+  if (chainId !== NETWORK.chainId) {
+    throw new Error(`Could not switch to Studionet. Current chain is ${chainId ?? "unknown"}.`);
+  }
+  return chainId;
 }
 
 export function describeWalletError(error: unknown) {
   const maybe = error as { code?: number; message?: string };
   if (maybe?.code === 4001) return "Wallet request rejected.";
   if (maybe?.code === -32002) return "A wallet request is already open. Check your wallet.";
-  if (maybe?.code === 4902) return "Studionet is not configured in this wallet.";
-  if (maybe?.message) return maybe.message;
+  if (maybe?.code === 4902) return "Studionet could not be configured in this wallet.";
+  if (maybe?.message) return maybe.message.slice(0, 180);
   return "Wallet request failed.";
 }

@@ -32,6 +32,9 @@ code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
 .wallet-button, .network-warning { border: 1px solid var(--ink); background: var(--panel); min-height: 38px; padding: 0 14px; cursor: pointer; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .wallet-button:hover { background: var(--signal); }
 .network-warning { background: var(--amber); }
+.network-warning:disabled { cursor: wait; opacity: .75; }
+.wallet-switch-feedback { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: min(320px, calc(100vw - 32px)); margin: 0; padding: 10px 12px; border: 1px solid var(--ink); background: var(--panel); box-shadow: var(--shadow); font-size: 12px; line-height: 1.4; }
+.wallet-switch-feedback.error-text { color: var(--danger); }
 .wallet-dot { width: 7px; height: 7px; border-radius: 50%; background: #57a768; display: inline-block; margin-right: 7px; }
 .wallet-popover { position: absolute; right: 0; top: 46px; width: 300px; padding: 14px; background: var(--ink); color: var(--paper); box-shadow: var(--shadow); z-index: 50; display: grid; gap: 10px; font-size: 12px; }
 .wallet-popover span { overflow-wrap: anywhere; color: #c7c7bd; }
@@ -273,7 +276,6 @@ code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
   .topbar { height: 64px; padding: 0 18px; gap: 10px; }
   .brand { font-size: 13px; }
   .wallet-button, .network-warning { padding: 0 9px; min-height: 34px; font-size: 9px; }
-  .network-warning { display: none; }
   .network-line { height: auto; padding: 8px 18px; align-items: flex-start; flex-direction: column; gap: 3px; }
   .network-line span:last-child { display: none; }
   .configuration-banner { padding: 10px 18px; }

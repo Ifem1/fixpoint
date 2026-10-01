@@ -7,13 +7,26 @@ import { shortHash } from "@/lib/validation";
 export function WalletButton() {
   const wallet = useWallet();
   const [open, setOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  const switchNetwork = async () => {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      await wallet.switchNetwork();
+    } catch {
+      // WalletProvider stores the normalized error for the visible feedback below.
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   if (wallet.connected) {
     return (
       <div className="wallet-cluster">
         {!wallet.correctNetwork && (
-          <button className="network-warning" onClick={() => void wallet.switchNetwork()}>
-            switch to 61999
+          <button className="network-warning" onClick={switchNetwork} disabled={switching}>
+            {switching ? "switching…" : "switch to 61999"}
           </button>
         )}
         <button className="wallet-button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
@@ -26,6 +39,11 @@ export function WalletButton() {
             <span>{wallet.account}</span>
             <button onClick={wallet.disconnect}>disconnect</button>
           </div>
+        )}
+        {(switching || wallet.error) && (
+          <p className={`wallet-switch-feedback${wallet.error ? " error-text" : ""}`} role={wallet.error ? "alert" : "status"} aria-live="polite">
+            {switching ? "Switching to Studionet…" : wallet.error}
+          </p>
         )}
       </div>
     );

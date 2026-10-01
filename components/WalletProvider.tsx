@@ -46,12 +46,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (!values.length) {
         setProvider(null);
         setWalletName(null);
+        setError(null);
       }
     };
     const chainChanged = (...args: unknown[]) => {
       const value = String(args[0] ?? "");
       const parsed = Number.parseInt(value, 16);
       setChainId(Number.isFinite(parsed) ? parsed : null);
+      if (parsed === NETWORK.chainId) setError(null);
     };
     provider.on("accountsChanged", accountsChanged);
     provider.on("chainChanged", chainChanged);
@@ -94,12 +96,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!provider) throw new Error("Connect an injected wallet first.");
     setError(null);
     try {
-      await switchToStudionet(provider);
-      setChainId(await getChainId(provider));
+      const verifiedChainId = await switchToStudionet(provider);
+      setChainId(verifiedChainId);
     } catch (cause) {
       const message = describeWalletError(cause);
       setError(message);
-      throw new Error(message);
+      try {
+        setChainId(await getChainId(provider));
+      } catch {
+        setChainId(null);
+      }
     }
   }, [provider]);
 
