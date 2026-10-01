@@ -253,7 +253,7 @@ code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
 .recovery-actions a, .recovery-actions button { font-size: 10px; font-weight: 800; text-decoration: underline; }
 
 
-@media (max-width: 1050px) {
+@media (max-width: 1000px) {
   .topbar { grid-template-columns: 1fr auto; }
   .primary-nav { display: none; }
   .hero-grid { grid-template-columns: 1fr; }
