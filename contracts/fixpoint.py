@@ -36,6 +36,8 @@ MAX_SUPPORT_URLS = 4
 MAX_INVARIANTS = 8
 MAX_PROTECTED_PATHS = 12
 MAX_ASSESSMENTS = 3
+MAX_PATCH_CHARS = 1400
+MAX_DIFF_CHARS = 12000
 GITHUB_API_HEADERS = {"Accept": "application/vnd.github+json", "User-Agent": "FIXPOINT-IntelligentContract"}
 
 
@@ -567,7 +569,9 @@ class Fixpoint(gl.Contract):
                     if status < 200 or status >= 300:
                         return {"ok": False, "status": status, "text": ""}
                     body = (response.body or b"").decode("utf-8", errors="replace")
-                    return {"ok": True, "status": status, "text": body[:maximum]}
+                    if len(body) > maximum:
+                        return {"ok": False, "status": status, "text": ""}
+                    return {"ok": True, "status": status, "text": body}
                 except Exception as exc:
                     return {"ok": False, "status": 0, "text": str(exc)[:180]}
 
@@ -640,7 +644,7 @@ class Fixpoint(gl.Contract):
             # expose a head_commit field. The final listed commit is the head.
             head = commits[-1] if isinstance(commits, list) and commits else {}
             head_sha = str(head.get("sha", "")).lower() if isinstance(head, dict) else ""
-            if relation != "ahead" or head_sha != candidate_sha or not isinstance(commits, list) or not isinstance(files, list):
+            if relation != "ahead" or head_sha != candidate_sha or not isinstance(commits, list):
                 return {
                     "provenance": "INVALID",
                     "base_defect": BASE_UNPROVEN,
@@ -651,8 +655,7 @@ class Fixpoint(gl.Contract):
                     "reasoning": "Candidate is not a bounded descendant of the frozen base revision.",
                 }
             if (not isinstance(total_commits, int) or total_commits < 1
-                    or total_commits != len(commits) or total_commits > 30
-                    or len(files) > 60):
+                    or total_commits != len(commits) or total_commits > 30):
                 return {
                     "provenance": "UNAVAILABLE",
                     "base_defect": BASE_UNPROVEN,
@@ -665,21 +668,27 @@ class Fixpoint(gl.Contract):
 
             protected_paths = json.loads(protected_paths_json)
             changed_paths: list[str] = []
-            patches: list[str] = []
-            patch_chars = 0
-            for file in files:
+            file_metadata: list[dict[str, typing.Any]] = []
+            metadata_incomplete = not isinstance(files, list) or not files
+            for file in files if isinstance(files, list) else []:
                 if not isinstance(file, dict):
+                    metadata_incomplete = True
                     continue
-                filename = str(file.get("filename", ""))
-                previous_filename = str(file.get("previous_filename", ""))
+                filename = file.get("filename", "")
+                previous_filename = file.get("previous_filename", "")
+                if not isinstance(filename, str) or not filename:
+                    metadata_incomplete = True
+                    continue
+                if not isinstance(previous_filename, str):
+                    metadata_incomplete = True
+                    previous_filename = ""
+                if file.get("status") == "renamed" and not previous_filename:
+                    metadata_incomplete = True
+                file_metadata.append(file)
                 if filename:
                     changed_paths.append(filename)
                 if previous_filename and previous_filename not in changed_paths:
                     changed_paths.append(previous_filename)
-                patch = str(file.get("patch", ""))[:1400]
-                if patch and patch_chars < 12000:
-                    patches.append(f"FILE {filename}\n{patch}")
-                    patch_chars += len(patch)
 
             protected_changed = False
             for filename in changed_paths:
@@ -699,6 +708,38 @@ class Fixpoint(gl.Contract):
                     "invariant_fail_ids": "",
                     "invariant_unproven_ids": ",".join(sorted(invariant_ids)),
                     "reasoning": "The candidate changed a verification-protected path frozen by the case.",
+                }
+
+            patches: list[str] = []
+            patch_chars = 0
+            diff_issue = "Candidate diff metadata is incomplete."
+            if not metadata_incomplete:
+                diff_issue = "The changed-file list exceeds the V1 envelope." if len(files) > 60 else ""
+            if not diff_issue:
+                for file in file_metadata:
+                    patch = file.get("patch")
+                    if not isinstance(patch, str) or not patch.strip():
+                        diff_issue = "A changed file has no usable patch."
+                        break
+                    if len(patch) > MAX_PATCH_CHARS:
+                        diff_issue = "A changed-file patch exceeds the complete V1 envelope."
+                        break
+                    entry = f"FILE {file['filename']}\n{patch}"
+                    entry_chars = len(entry) + (1 if patches else 0)
+                    if patch_chars + entry_chars > MAX_DIFF_CHARS:
+                        diff_issue = "The complete candidate diff exceeds the V1 envelope."
+                        break
+                    patches.append(entry)
+                    patch_chars += entry_chars
+            if diff_issue:
+                return {
+                    "provenance": "UNAVAILABLE",
+                    "base_defect": BASE_UNPROVEN,
+                    "candidate_defect": CANDIDATE_UNPROVEN,
+                    "witness_integrity": WITNESS_UNPROVEN,
+                    "invariant_fail_ids": "",
+                    "invariant_unproven_ids": ",".join(sorted(invariant_ids)),
+                    "reasoning": diff_issue,
                 }
 
             support_texts: list[str] = []

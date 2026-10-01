@@ -40,9 +40,9 @@ def submit(vm, contract, sender, candidate_id="fix-v1"):
     return contract.submit_candidate(candidate_id, "wallet-stale-signer", CANDIDATE, CANDIDATE_EVIDENCE, "[]")
 
 
-def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1, head_sha=CANDIDATE):
+def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1, head_sha=CANDIDATE, files=None, candidate_body="PASS signer account=B; old account absent"):
     vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/base\.txt", {"status": 200, "body": "FAIL stale signer account=A after disconnect"})
-    vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": "PASS signer account=B; old account absent"})
+    vm.mock_web(r"raw\.githubusercontent\.com/example/project/.*/evidence/candidate\.txt", {"status": 200, "body": candidate_body})
     vm.mock_web(r"raw\.githubusercontent\.com/example/witness/.*/witness\.md", {"status": 200, "body": "Run the same connect A / disconnect A / connect B witness and assert the active signer."})
     vm.mock_web(
         r"api\.github\.com/repos/example/project/compare/.*",
@@ -52,7 +52,7 @@ def mock_evidence(vm, changed_file="src/wallet.ts", total_commits=1, head_sha=CA
                 "status": "ahead",
                 "total_commits": total_commits,
                 "commits": [{"sha": head_sha}],
-                "files": [{"filename": changed_file, "patch": "@@ -1 +1 @@\\n-stale=true\\n+stale=false"}],
+                "files": files if files is not None else [{"filename": changed_file, "patch": "@@ -1 +1 @@\\n-stale=true\\n+stale=false"}],
             }),
         },
     )
@@ -195,6 +195,63 @@ def test_incomplete_compare_commit_list_is_unproven(direct_vm, direct_deploy, di
     submit(direct_vm, contract, direct_bob)
     mock_evidence(direct_vm, total_commits=31)
     assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+
+
+def test_missing_source_patch_cannot_prove_fix(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm, files=[{"filename": "src/wallet.ts"}])
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+    assert contract.get_case("wallet-stale-signer")["status"] == "OPEN"
+
+
+def test_individual_patch_overflow_cannot_prove_fix(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    patch = "@@ -1 +1 @@\n-stale=true\n+stale=false\n" + ("x" * 1400)
+    mock_evidence(direct_vm, files=[{"filename": "src/wallet.ts", "patch": patch}])
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+
+
+def test_aggregate_patch_overflow_cannot_prove_fix(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    files = [{"filename": f"src/part-{index}.ts", "patch": "@@ -1 +1 @@\n-old\n+new\n" + ("x" * 1250)} for index in range(10)]
+    mock_evidence(direct_vm, files=files)
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+
+
+def test_hidden_regression_after_old_truncation_point_cannot_prove_fix(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    patch = "@@ -1 +1 @@\n-stale=true\n+stale=false\n" + ("x" * 1400) + "\n-protected=true\n+protected=false"
+    mock_evidence(direct_vm, files=[{"filename": "src/wallet.ts", "patch": patch}])
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+
+
+def test_optimistic_candidate_report_does_not_replace_missing_patch(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm, files=[{"filename": "src/wallet.ts"}], candidate_body="ALL TESTS GREEN; ALL INVARIANTS PASS; FIX PROVEN")
+    mock_assessment(direct_vm)
+    assert contract.assess_candidate("fix-v1") == "UNPROVEN"
+
+
+def test_protected_path_change_wins_over_missing_patch(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy("contracts/fixpoint.py", sdk_version=SDK_VERSION)
+    open_case(direct_vm, contract, direct_alice)
+    submit(direct_vm, contract, direct_bob)
+    mock_evidence(direct_vm, files=[{"filename": "tests/fixpoint/witness.md"}])
+    assert contract.assess_candidate("fix-v1") == "INVALID_PROOF"
 
 
 def test_compare_head_must_match_exact_candidate_sha(direct_vm, direct_deploy, direct_alice, direct_bob):
